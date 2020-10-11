@@ -7,8 +7,10 @@ QueriedView and QueriedView - Set of QueriedView profiles.
 //var qpset = new qvs(qprofiles, {debug: 0});
 //qpset.addroutes(router, {simu: 0}); // qprofiles
 
-var chtrans = require("chtrans.js");
-
+var chtrans = require("./chtrans.js");
+// Store at addroutes() as global singleton (for now).
+// TODO: Pass in (e.g.) req.qpset
+var qpset;
 ///////////////////////////////////////////////////////////
 function qv() {}
 qv.where = where;
@@ -20,7 +22,7 @@ function qvs(qps, opts) {
   this.qps = qps;
   // this.router = router;
   this.qmethod = "query"; // MySQL / 
-  if (opts.dbtype = 'sqlite') { this.qmethod = "run"; } // // "run" sqlite
+  if (opts.dbtype == 'sqlite') { this.qmethod = "run"; } // // "run" sqlite
   if (typeof opts.debug != 'undefined') { this.debug = opts.debug; }
  qps.forEach(function (qp) {
     qp.__proto__ = qv.prototype;
@@ -30,7 +32,7 @@ function qvs(qps, opts) {
 qvs.prototype.getq = getq;
 qvs.prototype.addroutes = addroutes;
 qvs.req2prof = req2prof;
-qvs.dclone = function (d) { return JSON.parse(JSON.stringify(d)); }
+qvs.dclone = function (d) { return JSON.parse(JSON.stringify(d)); };
 //qvs.prototype.getq = getq;
 // Qvs(set, router)/Qv ()
 function getq (i) {
@@ -78,6 +80,7 @@ function req2prof(req, jerr) { // stat
 
 function addroutes(router, opts) { // Qvs
   var qviews = this;
+  qpset = qviews; // Singleton
   opts = opts || {};
   var hdlrs = {"chart": chartview, "tab": tableview, "grid":tableview, "opts": optionsview};
   if (!router) { console.log(""); return; }

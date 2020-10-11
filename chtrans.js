@@ -35,7 +35,7 @@ function tochart(qp, result) { // Qv
 
       //if (st == 'pie') { chart.datasets[i].backgroundColor.push(); } // Random color !
       i++;
-    })
+    });
   });
   if (st == 'pie') { piecolor(qp, chart); }
   return chart;
@@ -78,5 +78,5 @@ var chtrans = {
   piecolor: piecolor
 };
 
-
+var window;
 if (!window && module) { module.exports = chtrans; }
