@@ -1,0 +1,11 @@
+{
+  "name": "queried_view",
+  "version": "1.0.0",
+  "description": "Transform queries into grid and chart view compatible data.",
+  "main": "queried_view.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Olli Hollmen",
+  "license": "MIT"
+}
