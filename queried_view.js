@@ -238,6 +238,8 @@ function qprofilesview(req, res) {
 * TODO: Use async
 */
 function tabinfo_load(conn, tabs) {
+  // Lazy-load to not impose hard-dependency.
+  //var async; async = require("async");
   //var
   tidx = {}; // Set stub
   if (!conn) { console.error("Need connection"); return; }
@@ -246,17 +248,24 @@ function tabinfo_load(conn, tabs) {
     var qs = "SELECT * FROM "+t+" WHERE 0=1";
     console.log("Inquirying: "+t);
     var query = conn.query(qs,  function(err, result, flds) {
-      if (err) { console.log("Error in query:"+qs); return; }
+      if (err) { console.log("Error in query:"+qs+": "+err); return; } // cb(err, null)
       //console.log(flds);
+      if (t.match(/\./)) {var narr = t.split(/\./); t = narr.pop(); } // ([])$
       tidx[t] = flds;
       //if (debug > 1) { console.log("FLDS: "+ JSON.stringify(flds, null, 2)); }
-    
+      //return cb(null, flds);
     });
   }
   tabs.forEach((t) => { qtable(t); });
+  setTimeout(() => { console.log(tidx);}, 3000);
+  // async.map(tabs, qtable, function (err, ress) {});
 }
 function tabinfo(req, res) {
-  res.json(tidx ? tidx : {});
+  if (!tidx) { return res.json({ status:"err", "msg": "tabinfo not available !" }); }
+  // Pre-transform ?
+  var tabs = [];
+  Object.keys(tidx).forEach((tn) => { tabs.push({name: tn, cols: tidx[tn]}); });
+  res.json({status: "ok", data: tidx});
 }
 hdlrs.tabinfo = tabinfo;
 /////////////////////////////////////////////////////
