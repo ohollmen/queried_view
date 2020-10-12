@@ -11,35 +11,45 @@ var chtrans = require("./chtrans.js");
 // Store at addroutes() as global singleton (for now).
 // TODO: Pass in (e.g.) req.qpset
 var qpset;
+var tidx;
 ///////////////////////////////////////////////////////////
 function qv() {}
 qv.where = where;
 qv.prototype.qcomp = qcomp;
 qv.prototype.req2qpara = req2qpara;
 
+/** Construct Queried View Set from one or more defs.
+* Options
+* - dbtype - DB type: mysql/sqlite (default: mysql, no need to pass)
+* - debug - Set more verbose output during various ops
+*/
 function qvs(qps, opts) {
   opts = opts || {};
   this.qps = qps;
+  if (opts.debug) { this.debug = 1; }
   // this.router = router;
   this.qmethod = "query"; // MySQL / 
   if (opts.dbtype == 'sqlite') { this.qmethod = "run"; } // // "run" sqlite
   if (typeof opts.debug != 'undefined') { this.debug = opts.debug; }
- qps.forEach(function (qp) {
+  qps.forEach(function (qp) {
     qp.__proto__ = qv.prototype;
- });
- console.log(qps.length +" profs");
+  });
+  this.debug && console.log(qps.length +" profs");
 }
-qvs.prototype.getq = getq;
+
 qvs.prototype.addroutes = addroutes;
 qvs.req2prof = req2prof;
 qvs.dclone = function (d) { return JSON.parse(JSON.stringify(d)); };
-//qvs.prototype.getq = getq;
+qvs.prototype.getq = getq;
+// Get query profile by name
 // Qvs(set, router)/Qv ()
-function getq (i) {
+function getq (name) {
+  if (!name) { console.error("No name passed"); return null; }
   var qprofiles = this.qps;
-  var n = qprofiles.filter(function (it) { return it.id == i; })[0];
+  var n = qprofiles.filter(function (it) { return it.id == name; })[0];
   return n;
 }
+// Combine query clause components into a query.
 function qcomp(p) { // Qv. (qp, p)
   var qp = this;
   var q = qp.sel; var w = "";
@@ -49,23 +59,47 @@ function qcomp(p) { // Qv. (qp, p)
   if (qp.group) { q += " "+qp.group; }
   return q;
 }
-
+// Form a where clause out of object keys and values
 function where (p) { // Qv static
   var w = "";
   if (typeof p != 'object') { throw "Param not an object "; }
+  var wcomps = [];
   Object.keys(p).forEach(function (k) {
-    w += k+" = '"+ p[k] + "'";
+    // Empty ? Array (and time type)
+    if (!p[k]) { return; }
+    wcomps.push( k+" = '"+ p[k] + "'" );
   });
+  w = wcomps.join(" AND ");
   return w;
 }
-
-function req2qpara(req) { // Qv (old: (qp, req))
+// Form a where in clause 
+function wherein(vals) {
+  if (!Array.isArray(vals)) { }
+  // Preprocess to numeric ?
+  var cnt = {str:0, num: 0};
+  var i = 0;
+  // Detect mixed ( => bad)?
+  //for (;i<vals.length;i++) {
+  //  if (typeof vals[i] == 'number') { cnt.num++; continue; }
+  //  if (vals[i].match(/^\d+$/)) { vals[i] = parseInt(vals[i]); cnt.num++; }
+  //  else { cnt.str++;}
+  //}
+  return vals.map((v) => {
+    if (typeof v == 'number') {return v;}
+    else if (typeof v == 'string') { v = v.replace(/'/g, "''"); return "'"+v+"'"; }
+  }).join(',');
+}
+// Extract query params from HTTP request.
+// Extracton is based on query profiles member params (array)
+function req2qpara(req, opts) { // Qv (old: (qp, req))
   var qp = this;
+  var extype = {"arr": function () {}, "obj": function () {}};
   var parr = [];
   var q = req.query;
   if (!q) { return parr; }
   var p = qp.params;
   if (!p) { return parr; }
+  //if (Array.isArray(p)) {type = "arr"; }
   p.forEach(function (k) { parr.push(q[k]); });
   return parr;
 }
@@ -199,7 +233,27 @@ function qprofilesview(req, res) {
   // var d = qvs.dclone(qpset.qps);
   res.json(qpset.qps);
 }
-
+/**
+* Note:
+* TODO: Use async
+*/
+function tabinfo_load(conn, tabs) {
+  //var
+  tidx = {}; // Set stub
+  if (!conn) { console.error("Need connection"); return; }
+  if (!Array.isArray(tabs)) { console.error("Need tabs in array"); return; }
+  function qtable(t, cb) {
+    var qs = "SELECT * FROM "+t+" WHERE 0=1";
+    var query = conn.query(qs,  function(err, result, flds) {
+      if (err) { console.log("Error in query:"+qs); return; }
+      //console.log(flds);
+      tidx[t] = flds;
+      //if (debug > 1) { console.log("FLDS: "+ JSON.stringify(flds, null, 2)); }
+    
+    });
+  }
+  tabs.forEach((t) => { qtable(t); });
+}
 
 /////////////////////////////////////////////////////
 module.exports = {
