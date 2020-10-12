@@ -264,5 +264,6 @@ module.exports = {
   QueriedView: qv,
   QueriedViewSet: qvs,
   makeopts: makeopts,
+  tabinfo_load: tabinfo_load,
   hdlrs: hdlrs
 };
