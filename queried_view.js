@@ -244,6 +244,7 @@ function tabinfo_load(conn, tabs) {
   if (!Array.isArray(tabs)) { console.error("Need tabs in array"); return; }
   function qtable(t, cb) {
     var qs = "SELECT * FROM "+t+" WHERE 0=1";
+    console.log("Inquirying: "+t);
     var query = conn.query(qs,  function(err, result, flds) {
       if (err) { console.log("Error in query:"+qs); return; }
       //console.log(flds);
@@ -254,7 +255,10 @@ function tabinfo_load(conn, tabs) {
   }
   tabs.forEach((t) => { qtable(t); });
 }
-
+function tabinfo(req, res) {
+  res.json(tidx ? tidx : {});
+}
+hdlrs.tabinfo = tabinfo;
 /////////////////////////////////////////////////////
 module.exports = {
   QueriedView: qv,
