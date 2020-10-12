@@ -233,6 +233,37 @@ function qprofilesview(req, res) {
   // var d = qvs.dclone(qpset.qps);
   res.json(qpset.qps);
 }
+// MYSQL_TYPE_...
+var typemap_mysql = {
+  "0":   "DECIMAL",
+  "1":   "TINY",
+  "2":   "SHORT",
+  "3":   "LONG",
+  "4":   "FLOAT",
+  "5":   "DOUBLE",
+  "6":   "NULL",
+  "7":   "TIMESTAMP",
+  "8":   "LONGLONG",
+  "9":   "INT24",
+  "10":  "DATE",
+  "11":  "TIME",
+  "12":  "DATETIME",
+  "13":  "YEAR",
+  "14":  "NEWDATE",
+  "15":  "VARCHAR",
+  "16":  "BIT",
+  "246": "NEWDECIMAL",
+  "247": "ENUM",
+  "248": "SET",
+  "249": "TINY_BLOB",
+  "250": "MEDIUM_BLOB",
+  "251": "LONG_BLOB",
+  "252": "BLOB",
+  "253": "VAR_STRING",
+  "254": "STRING",
+  "255": "GEOMETRY"
+};
+
 /**
 * Note:
 * TODO: Use async
@@ -251,6 +282,11 @@ function tabinfo_load(conn, tabs) {
       if (err) { console.log("Error in query:"+qs+": "+err); return; } // cb(err, null)
       //console.log(flds);
       if (t.match(/\./)) {var narr = t.split(/\./); t = narr.pop(); } // ([])$
+      
+      for (var i=1;i < flds.length;i++) {
+        flds[i].seq = i;
+	flds[i].typestr = typemap_mysql[flds[i].type] || "???";
+      }
       tidx[t] = flds;
       //if (debug > 1) { console.log("FLDS: "+ JSON.stringify(flds, null, 2)); }
       //return cb(null, flds);
