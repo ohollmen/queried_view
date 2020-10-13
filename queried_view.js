@@ -374,7 +374,8 @@ function vals2cols(req, res) {
       // TODO: Pad
       comps.push("SUM(case WHEN "+a+" = '"+v+"' THEN 1 END) AS t_"+a+"");
     });
-    res.end();
+    console.log("Created: "+comps.join(",\n"));
+    res.end(comps.join(",\n"));
   });
 
 }
