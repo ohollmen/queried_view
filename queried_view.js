@@ -212,7 +212,7 @@ function tableview(req, res) {
   var query = req.conn.query(qs, qpara, function(err, result, flds) {
      if (err) { jerr.msg += err; res.json( jerr ); console.log(jerr.msg); return; }
      if (debug) { console.log(result); }
-     res.json({status: ok, data: result}); // 
+     res.json({status: "ok", data: result}); // 
   });
 }
 
@@ -238,7 +238,7 @@ function chartview(req, res) {
     if (typeof chart == 'string') { jerr.msg += "Transformation to chart failed:" + chart; console.log(jerr.msg); return res.json(jerr); }
     chart.t = (Date.now() / 1000) - t0; // Timing info (Only on debug ?)
     if (qn.title) { chart.title = qn.title; }
-    res.json({status: ok, data: chart}); // 
+    res.json({status: "ok", data: chart}); // 
   });
 }
 
@@ -276,7 +276,7 @@ function optionsview(req, res) {
     //console.log(result);
     var opts = makeopts(result, 'name');
     if (debug > 1) { console.log("FLDS: "+ JSON.stringify(flds, null, 2)); }
-    res.json({status: ok, data: opts}); // 
+    res.json({status: "ok", data: opts}); // 
   });
 }
 
