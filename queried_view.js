@@ -1,5 +1,26 @@
 /**
 QueriedView and QueriedView - Set of QueriedView profiles.
+
+## Testing basic queries with Mysql (e.g. params)
+
+var mysql = require("mysql");
+var cfg = require("./dbconn.json");
+var conn  = mysql.createPool( cfg );
+cfg.dbconn["acquireTimeout"] = 30000;
+var conn  = mysql.createPool( cfg.dbconn );
+var qs = "SELECT * FROM mytable WHERE field ";
+var qpara = [];
+var query = conn.query(qs ,qpara,  function(err, result, flds) {
+  if (err) { console.log("Error: "+err); return; }
+  console.log("Query: "+qs);
+  console.log("Query-params: ",qpara);
+  console.log(result.length + " Rows.");
+  //console.log(results);
+  process.exit(1);
+});
+
+https://www.npmjs.com/package/mysql#escaping-query-identifiers
+
 */
 // Mysql query meta fields: Field, Type, Null, Key, Default, Extra
 
@@ -13,6 +34,7 @@ var chtrans = require("./chtrans.js");
 var qpset;
 var tidx;
 ///////////////////////////////////////////////////////////
+// We merely cast to this by __proto__
 function qv() {}
 qv.where = where;
 qv.prototype.qcomp = qcomp;
@@ -84,13 +106,23 @@ function wherein(vals) {
   //  if (vals[i].match(/^\d+$/)) { vals[i] = parseInt(vals[i]); cnt.num++; }
   //  else { cnt.str++;}
   //}
-  return vals.map((v) => {
+  var arr = vals.map((v) => {
     if (typeof v == 'number') {return v;}
     else if (typeof v == 'string') { v = v.replace(/'/g, "''"); return "'"+v+"'"; }
-  }).join(',');
+  }); // .join(',');
+  return arr.join(', ');
+}
+// Inversion of between (by NOT) should be done by caller
+function between(vals) {
+  if (!Array.isArray(vals)) { return; }
+  if (vals.length != 2) { return; }
+  // Quote intelligently
+  // No CAST('2003-01-01' AS DATE) needed for time fields (as told by some legacy mysql doc)
+  return " BETWEEN "+vals.join(" AND ");
 }
 // Extract query params from HTTP request.
 // Extracton is based on query profiles member params (array)
+// By driving by qp.params we get deterministic order of params.
 function req2qpara(req, opts) { // Qv (old: (qp, req))
   var qp = this;
   var extype = {"arr": function () {}, "obj": function () {}};
@@ -99,8 +131,28 @@ function req2qpara(req, opts) { // Qv (old: (qp, req))
   if (!q) { return parr; }
   var p = qp.params;
   if (!p) { return parr; }
+  function isfunc(v) {
+    return (typeof v == 'function') ? 1 : 0;
+  }
   //if (Array.isArray(p)) {type = "arr"; }
-  p.forEach(function (k) { parr.push(q[k]); });
+  p.forEach(function (k) {
+    var v = q[k]; // By default grab from query
+    if (!v && qp.defpara) {
+      v = qp.defpara[k];
+      if (Array.isArray(v)) {
+        
+        //parr = parr.concat(v);
+	v.forEach((val) => {
+	  //if (typeof val == 'function') { parr.push(val()); }
+	  //else { parr.push(val); }
+	  parr.push(isfunc(val) ? val() : val);
+	});
+	return;
+      }
+    }
+    if (!v) { console.log("req2qpara: Warning: No value from query or defaults: "+k); }
+    parr.push(isfunc(v) ? v() : v);
+  });
   return parr;
 }
 
@@ -152,13 +204,15 @@ function tableview(req, res) {
   
   var qname = qvs.req2prof(req, jerr);
   if (!qname) { jerr.msg += "No query profile by:"+qname;return res.json(jerr); }
-  var qn    = qpset.getq(qname); // 'chmerged'
+  var qn    = qpset.getq(qname);
   var debug = qn.debug || qpset.debug; // req.query.debug ?
+  
+  var qpara = qn.req2qpara(req); // [];
   var qs    = qn.qcomp();
-  var query = req.conn.query(qs,  function(err, result, flds) {
+  var query = req.conn.query(qs, qpara, function(err, result, flds) {
      if (err) { jerr.msg += err; res.json( jerr ); console.log(jerr.msg); return; }
      if (debug) { console.log(result); }
-     res.json(result); // {status: ok, data: result}
+     res.json({status: ok, data: result}); // 
   });
 }
 
@@ -169,10 +223,8 @@ function chartview(req, res) {
   var qname = qvs.req2prof(req, jerr);
   if (!qname) { jerr.msg += "No query profile by:"+qname;return res.json(jerr); }
   var qn = qpset.getq(qname);
-  var qs = qn.qcomp();
-  //console.log("Query: ...", qn);
-  //var qp = req2qpara(qn, req); // Validate (e.g. nulls) ?
   var qpara = qn.req2qpara(req);
+  var qs = qn.qcomp();
   console.log("Req-Q-Params: ...", p);
   console.log("DBQParams(to mix-in?): ...", qpara);
   console.log("SQL-Query: "+ qs);
@@ -181,13 +233,12 @@ function chartview(req, res) {
   var query = req.conn.query(qs ,qpara,  function(err, result, flds) {
     if (err) { jerr.msg += err; res.json( jerr ); return; }
     console.log("Got "+result.length+" result rows");
-    if (qpset.debug) { console.log("Results(pre-trans): ", result); }
-    //var chart = tobuildchart(qp, result);
+    if (qpset.debug > 1) { console.log("Results(pre-trans): ", result); }
     var chart = chtrans.tochart(qn, result);
     if (typeof chart == 'string') { jerr.msg += "Transformation to chart failed:" + chart; console.log(jerr.msg); return res.json(jerr); }
     chart.t = (Date.now() / 1000) - t0; // Timing info (Only on debug ?)
     if (qn.title) { chart.title = qn.title; }
-    res.json(chart); // {status: ok, data: chart}
+    res.json({status: ok, data: chart}); // 
   });
 }
 
@@ -218,20 +269,21 @@ function optionsview(req, res) {
   if (!qname) { jerr.msg += "No query profile by:"+qname;return res.json(jerr); }
   var qn    = qpset.getq(qname);
   var debug = qn.debug || qpset.debug || 0;
+  //var qpara = qn.req2qpara(req);
   var qs    = qn.qcomp();
   var query = req.conn.query(qs,  function(err, result, flds) {
     if (err) { jerr.msg += err; res.json( jerr ); return; }
     //console.log(result);
     var opts = makeopts(result, 'name');
     if (debug > 1) { console.log("FLDS: "+ JSON.stringify(flds, null, 2)); }
-    res.json(opts); // {status: ok, data: opts}
+    res.json({status: ok, data: opts}); // 
   });
 }
 
 function qprofilesview(req, res) {
   // Possibly clone, cut parent links
   // var d = qvs.dclone(qpset.qps);
-  res.json(qpset.qps);
+  res.json({status: "ok", data: qpset.qps});
 }
 // MYSQL_TYPE_...
 var typemap_mysql = {
@@ -283,8 +335,8 @@ function tabinfo_load(conn, tabs) {
       //console.log(flds);
       if (t.match(/\./)) {var narr = t.split(/\./); t = narr.pop(); } // ([])$
       
-      for (var i=1;i < flds.length;i++) {
-        flds[i].seq = i;
+      for (var i=0;i < flds.length;i++) {
+        flds[i].seq = i+1;
 	flds[i].typestr = typemap_mysql[flds[i].type] || "???";
       }
       tidx[t] = flds;
@@ -293,7 +345,7 @@ function tabinfo_load(conn, tabs) {
     });
   }
   tabs.forEach((t) => { qtable(t); });
-  setTimeout(() => { console.log(tidx);}, 3000);
+  //setTimeout(() => { console.log(tidx);}, 3000);
   // async.map(tabs, qtable, function (err, ress) {});
 }
 function tabinfo(req, res) {
@@ -304,6 +356,29 @@ function tabinfo(req, res) {
   res.json({status: "ok", data: tidx});
 }
 hdlrs.tabinfo = tabinfo;
+
+// Turn values of one column into multiple columns in result set.
+function vals2cols(req, res) {
+  var jerr = { "status" : "err", "msg": "DB Search (distinct) failed. "};
+  var q = req.query;
+  var t = q.table;
+  var a = q.attr;
+  var qs = "SELECT DISTINCT("+a+") uni FROM "+t+"";
+  var query = req.conn.query(qs,  function(err, result, flds) {
+    if (err) { jerr.msg += err; res.json( jerr ); return; }
+    //console.log(result);
+    var vals = result.map((e) => { return e.uni; });
+    var cont = "";
+    var comps = [];
+    vals.forEach((v) => {
+      // TODO: Pad
+      comps.push("SUM(case WHEN "+a+" = '"+v+"' THEN 1 END) AS t_"+a+"");
+    });
+    res.end();
+  });
+
+}
+hdlrs.vals2cols = vals2cols;
 /////////////////////////////////////////////////////
 module.exports = {
   QueriedView: qv,
