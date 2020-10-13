@@ -159,7 +159,10 @@ function req2qpara(req, opts) { // Qv (old: (qp, req))
 function req2prof(req, jerr) { // stat
   var m; var qname;
   var path = req.url.split("?").shift();
-  if (m = path.match(/^\/(\w+)$/)) { qname = m[1]; }
+  // ^\/(\w+)$ - strip ^ to fit also /para/ url
+  if (m = path.match(/\/(\w+)$/)) { qname = m[1]; }
+  // Alternative: Use req.params (:profid)
+  // else if (req.params.profid) { return req.params.profid; }
   else { jerr.msg += "Could not find search profile for: "+req.url; console.log(jerr.msg); return '';}
   return qname;
 }
