@@ -171,12 +171,16 @@ function addroutes(router, opts) { // Qvs
   var hdlrs = {"chart": chartview, "tab": tableview, "grid":tableview, "opts": optionsview};
   if (!router) { console.log(""); return; }
   var prepath = "/"; // By default on root
+  var parapath = "para/";
   if (opts.pathprefix) { prepath = opts.pathprefix; }
   var qps = qviews.qps;
   qps.forEach(function (qv) {
   // qvs.qvs.forEach(function (qv) {
     if (qv.disa) { return; }
     if (!hdlrs[qv.type]) { console.error("Warn: No handler for "+qv.type); return; }
+    // Para handler
+    var url_p = prepath + parapath + qv.id;
+    router.get(url_p, profpara);
     // Simple
     var url = prepath + qv.id;
     var hdlr = hdlrs[qv.type];
@@ -363,16 +367,23 @@ function vals2cols(req, res) {
   var q = req.query;
   var t = q.table;
   var a = q.attr;
+  // Should launch COUNT(DISTINCT()) first.
   var qs = "SELECT DISTINCT("+a+") uni FROM "+t+"";
   var query = req.conn.query(qs,  function(err, result, flds) {
     if (err) { jerr.msg += err; res.json( jerr ); return; }
     //console.log(result);
-    var vals = result.map((e) => { return e.uni; });
+    if (result.length > 30) { jerr.msg += "Too many vals."; res.json( jerr ); return; }
+    var maxlen = 0;
+    var vals = result.map((e) => {
+      maxlen = e.uni.length > maxlen ? e.uni.length : maxlen;
+      return e.uni;
+    });
     var cont = "";
     var comps = [];
     vals.forEach((v) => {
       // TODO: Pad
-      comps.push("SUM(case WHEN "+a+" = '"+v+"' THEN 1 END) AS t_"+a+"");
+      var pad = " ".repeat(maxlen - v.length);
+      comps.push("SUM(CASE WHEN "+a+" = '"+v+"'"+pad+" THEN 1 END) AS t_"+v+"");
     });
     console.log("Created: "+comps.join(",\n"));
     res.end(comps.join(",\n"));
@@ -380,6 +391,21 @@ function vals2cols(req, res) {
 
 }
 hdlrs.vals2cols = vals2cols;
+/** Get parameter info for profile (/params/:profid).
+* Consists of simple syncronous lookup to profile.
+* Include both:
+* - param keys: (from prof.params)
+*/
+function profpara(req, res) {
+  var jerr = {"status" : "err", "msg": "No prof param info available. "};
+  //var p = req.query;
+  var qname = qvs.req2prof(req, jerr);
+  var qn    = qpset.getq(qname);
+  if (!qn) { jerr.msg += ""; return res.json(jerr); }
+  var pi = { params: qn.params, defpara: qn.defpara};
+  res.json({status: "ok", data: pi});
+}
+hdlrs.profpara = profpara;
 /////////////////////////////////////////////////////
 module.exports = {
   QueriedView: qv,
