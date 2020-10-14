@@ -292,6 +292,7 @@ function qprofilesview(req, res) {
   // var d = qvs.dclone(qpset.qps);
   res.json({status: "ok", data: qpset.qps});
 }
+// https://dev.mysql.com/doc/internals/en/myisam-column-attributes.html
 // MYSQL_TYPE_...
 var typemap_mysql = {
   "0":   "DECIMAL",
@@ -404,9 +405,24 @@ function profpara(req, res) {
   //var p = req.query;
   var qname = qvs.req2prof(req, jerr);
   var qn    = qpset.getq(qname);
-  if (!qn) { jerr.msg += ""; return res.json(jerr); }
-  var pi = { params: qn.params, defpara: qn.defpara};
+  if (!qn) { jerr.msg += "No profile found"; return res.json(jerr); }
+  console.log("look up params for profid: "+qname+" ", qn);
+  // Need to eval default values ?
+  var defpara = {};
+  if (qn.defpara) {
+    //defpara = qvs.dclone(qn.defpara);
+    Object.keys(qn.defpara).forEach(function (k) {
+      var v = qn.defpara[k];
+      defpara[k] = isfunc(v) ? v() : v;
+    });
+  }
+  else { jerr.msg += "No default params"; return res.json(jerr); }
+  var pi = { params: qn.params, defpara: defpara };
   res.json({status: "ok", data: pi});
+  
+  function isfunc(v) {
+    return (typeof v == 'function') ? 1 : 0;
+  }
 }
 hdlrs.profpara = profpara;
 /////////////////////////////////////////////////////
